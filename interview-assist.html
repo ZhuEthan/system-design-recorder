@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Interview Design Assistant</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0F1117;--surface:#181B24;--surface2:#1F2330;
+    --border:#2A2F3E;--accent:#4F8EF7;
+    --text:#E8EAF0;--muted:#6B7280;--tag:#252B3B;
+    --green:#3DD68C;
+  }
+  html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+  /* LAYOUT */
+  .app{display:grid;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+  .header{display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .header-logo{font-size:15px;font-weight:600;letter-spacing:.04em;color:var(--text)}
+  .header-logo span{color:var(--accent)}
+  .main{display:grid;grid-template-columns:260px 1fr;overflow:hidden}
+
+  /* LEFT PANEL */
+  .left{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;background:var(--surface)}
+  .panel-header{padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .panel-title{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+  /* TOPIC TAGS */
+  .topic-tags{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px}
+  .topic-tags::-webkit-scrollbar{width:4px}
+  .topic-tags::-webkit-scrollbar-track{background:transparent}
+  .topic-tags::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  .tag{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:500;background:var(--tag);color:var(--muted);border:1px solid var(--border);cursor:pointer;transition:all .2s;letter-spacing:.03em}
+  .tag:hover{border-color:var(--accent);color:var(--accent)}
+  .tag.active{background:rgba(79,142,247,.15);border-color:var(--accent);color:var(--accent)}
+
+  /* RIGHT PANEL */
+  .right{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+  .artifact-header{padding:16px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface)}
+  .artifact-title{font-size:15px;font-weight:600;color:var(--text)}
+  .artifact-subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .artifact-body{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+  .artifact-body::-webkit-scrollbar{width:4px}
+  .artifact-body::-webkit-scrollbar-track{background:transparent}
+  .artifact-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+  .artifact-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .3s}
+  .artifact-card.highlight{border-color:var(--accent);box-shadow:0 0 0 1px rgba(79,142,247,.2)}
+  .artifact-card-header{padding:14px 18px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+  .artifact-card-body{padding:20px}
+
+  .diagram-wrap{background:#0a0d14;border-radius:8px;padding:16px;overflow:auto}
+  .diagram-wrap svg{display:block;max-width:100%;height:auto}
+  .diagram-wrap-img{overflow:hidden;border-radius:0 0 10px 10px;background:#f9f9f9;line-height:0;}
+  .diagram-wrap-img img{display:block;max-width:100%;max-height:calc(100vh - 280px);width:auto;height:auto;transform-origin:top left;}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;gap:12px}
+  .empty-icon{font-size:48px;opacity:.3}
+  .empty-text{font-size:14px;line-height:1.6;max-width:280px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-logo">Interview <span>Design</span> Assistant</div>
+  </header>
+
+  <div class="main">
+    <!-- LEFT: TOPICS -->
+    <div class="left">
+      <div class="panel-header">
+        <span class="panel-title">Topics</span>
+      </div>
+      <div class="topic-tags" id="topicTags"></div>
+    </div>
+
+    <!-- RIGHT: ARTIFACT -->
+    <div class="right">
+      <div class="artifact-header">
+        <div>
+          <div class="artifact-title" id="artifactTitle">Select a topic</div>
+          <div class="artifact-subtitle" id="artifactSubtitle">Click a topic on the left to see its system design diagram</div>
+        </div>
+      </div>
+      <div class="artifact-body" id="artifactBody">
+        <div class="empty-state">
+          <div class="empty-icon">📐</div>
+          <div class="empty-text">Select a topic from the left panel to see its diagram and notes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── ARTIFACT DEFINITIONS ────────────────────────────────────────────────────
+
+const ARTIFACTS = {
+  "job-scheduler": {
+    title: "Job Scheduler",
+    subtitle: "Distributed task / cron job scheduler system design",
+    diagram: `<img src="artifacts/job-Scheduler.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "rpc-framework": {
+    title: "RPC Framework",
+    subtitle: "Remote Procedure Call framework design (gRPC / Thrift style)",
+    diagram: `<img src="artifacts/RPC-framework.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "distributed-key-value-store": {
+    title: "Distributed Key-Value Store",
+    subtitle: "Dynamo / Cassandra style distributed KV store",
+    diagram: `<img src="artifacts/distributed-key-value-store.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "distributed-file-system": {
+    title: "Distributed File System",
+    subtitle: "GFS / HDFS style distributed file system design",
+    diagram: `<img src="artifacts/distributed-file-system.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "gpu-job-scheduler": {
+    title: "GPU Job Scheduler",
+    subtitle: "Distributed GPU job scheduling system (ML training workloads)",
+    diagram: `<img src="artifacts/gpu-job-scheduler.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "book-purchase": {
+    title: "Book Purchase / Price Aggregation",
+    subtitle: "Distributed book marketplace with multi-seller price resolution",
+    diagram: `<img src="artifacts/book-purchase.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "chat-system-design": {
+    title: "Chat System",
+    subtitle: "Group chat with Redis PubSub, WebSocket, and inbox model",
+    diagram: `<img src="artifacts/chat-system.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "video-streaming": {
+    title: "Video Streaming",
+    subtitle: "YouTube-style video upload and streaming system",
+    diagram: `<img src="artifacts/video-streaming.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "payment-system": {
+    title: "Payment System",
+    subtitle: "Stripe-style payment processing with strong financial integrity",
+    diagram: `<img src="artifacts/payment-system.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "quota-system": {
+    title: "Quota System",
+    subtitle: "Usage quota and rate enforcement system design",
+    diagram: `<img src="artifacts/quota-system.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "instagram": {
+    title: "Instagram",
+    subtitle: "Photo sharing social platform system design",
+    diagram: `<img src="artifacts/instagram.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "robinhood": {
+    title: "Robinhood",
+    subtitle: "Stock trading platform system design",
+    diagram: `<img src="artifacts/robinhood.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "ad-click-aggregator": {
+    title: "Ad Click Aggregator",
+    subtitle: "Real-time ad click event aggregation system design",
+    diagram: `<img src="artifacts/Ad-Click-Aggregator.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "dropbox": {
+    title: "Dropbox",
+    subtitle: "Cloud file storage and sync system design",
+    diagram: `<img src="artifacts/Drop-Box.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "ticket-master": {
+    title: "Ticket Master",
+    subtitle: "High-throughput event ticketing and seat reservation system",
+    diagram: `<img src="artifacts/Ticket-Master.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "deny-listing": {
+    title: "Deny Listing",
+    subtitle: "Distributed deny list / blocklist enforcement system design",
+    diagram: `<img src="artifacts/Deny-Listing.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "rate-limiter": {
+    title: "Rate Limiter",
+    subtitle: "Distributed rate limiting system design",
+    diagram: `<img src="artifacts/rate-limit.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "stock-price-alerting": {
+    title: "Stock Price Alerting",
+    subtitle: "Real-time price alert system for financial markets",
+    diagram: `<img src="artifacts/stock-price-alerting.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "uber-eats": {
+    title: "Uber Eats",
+    subtitle: "Food delivery platform with restaurant, order, and courier management",
+    diagram: `<img src="artifacts/uber-eat.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "uber": {
+    title: "Uber",
+    subtitle: "Ride-sharing platform with real-time matching and location tracking",
+    diagram: `<img src="artifacts/uber.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "yelp": {
+    title: "Yelp",
+    subtitle: "Local business search and review platform system design",
+    diagram: `<img src="artifacts/yelp.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "heat-map": {
+    title: "Heat Map",
+    subtitle: "Real-time geospatial heat map for location density visualization",
+    diagram: `<img src="artifacts/heat-map.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "shopping-cart": {
+    title: "Shopping Cart",
+    subtitle: "E-commerce shopping cart with inventory, pricing, and checkout",
+    diagram: `<img src="artifacts/shopping-cart.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  },
+  "google-docs": {
+    title: "Google Docs",
+    subtitle: "Collaborative real-time document editing system design",
+    diagram: `<img src="artifacts/google-docs.png" style="max-width:100%;border-radius:8px;display:block;"/>`
+  }
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+
+let currentTopic = null;
+let diagramZoom = 1, diagramTx = 0, diagramTy = 0;
+
+// ─── NOTES ───────────────────────────────────────────────────────────────────
+
+function saveNotes() {
+  if (!currentTopic) return;
+  localStorage.setItem('notes_' + currentTopic, document.getElementById('notesArea').value);
+  const ind = document.getElementById('notesSaved');
+  if (!ind) return;
+  ind.style.opacity = '1';
+  clearTimeout(ind._t);
+  ind._t = setTimeout(() => ind.style.opacity = '0', 1500);
+}
+
+// ─── ARTIFACT DISPLAY ────────────────────────────────────────────────────────
+
+function showArtifact(key) {
+  const art = ARTIFACTS[key];
+  if (!art) return;
+  diagramZoom = 1; diagramTx = 0; diagramTy = 0;
+  currentTopic = key;
+
+  document.getElementById('artifactTitle').textContent = art.title;
+  document.getElementById('artifactSubtitle').textContent = art.subtitle;
+
+  const isImg = art.diagram.trimStart().startsWith('<img');
+  document.getElementById('artifactBody').innerHTML = `
+    <div class="artifact-card">
+      <div class="artifact-card-header">
+        <span>My Notes</span>
+        <span id="notesSaved" style="font-size:11px;color:var(--green);opacity:0;transition:opacity .6s">✓ Saved</span>
+      </div>
+      <div class="artifact-card-body" style="padding:12px">
+        <textarea id="notesArea"
+          placeholder="Clarifying questions, reminders, key points to mention…"
+          oninput="saveNotes()"
+          style="width:100%;min-height:72px;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text);font-size:14px;font-family:inherit;line-height:1.7;outline:none;box-sizing:border-box;transition:border-color .2s"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--border)'"
+        ></textarea>
+      </div>
+    </div>
+    <div class="artifact-card highlight">
+      <div class="artifact-card-header">
+        <span>System Diagram</span>
+        <span style="color:var(--muted);font-weight:400">${art.subtitle}</span>
+      </div>
+      ${isImg
+        ? `<div class="diagram-wrap-img">${art.diagram}</div>`
+        : `<div class="artifact-card-body"><div class="diagram-wrap">${art.diagram}</div></div>`
+      }
+    </div>
+  `;
+
+  const notesArea = document.getElementById('notesArea');
+  if (notesArea) notesArea.value = localStorage.getItem('notes_' + key) || '';
+
+  const wrap = document.querySelector('.diagram-wrap-img');
+  if (wrap) {
+    let mouseX = 0, mouseY = 0;
+    wrap.addEventListener('mousemove', e => {
+      const r = wrap.getBoundingClientRect();
+      mouseX = e.clientX - r.left;
+      mouseY = e.clientY - r.top;
+    });
+    wrap.addEventListener('wheel', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const factor = e.deltaY < 0 ? 1.1 : (1 / 1.1);
+      const newZoom = Math.min(Math.max(diagramZoom * factor, 0.5), 5);
+      const scale = newZoom / diagramZoom;
+      diagramTx = mouseX - (mouseX - diagramTx) * scale;
+      diagramTy = mouseY - (mouseY - diagramTy) * scale;
+      diagramZoom = newZoom;
+      const img = wrap.querySelector('img');
+      if (img) img.style.transform = `translate(${diagramTx}px, ${diagramTy}px) scale(${diagramZoom})`;
+    }, { passive: false });
+  }
+
+  document.querySelectorAll('.tag').forEach(t => {
+    t.classList.toggle('active', t.dataset.key === key);
+  });
+}
+
+// ─── TOPIC TAGS ──────────────────────────────────────────────────────────────
+
+function buildTags() {
+  const container = document.getElementById('topicTags');
+  for (const [key, art] of Object.entries(ARTIFACTS)) {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = art.title;
+    tag.dataset.key = key;
+    tag.onclick = () => showArtifact(key);
+    container.appendChild(tag);
+  }
+}
+
+buildTags();
+</script>
+</body>
+</html>
